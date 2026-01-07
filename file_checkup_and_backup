@@ -1,0 +1,73 @@
+require 'csv'
+require 'sqlite3'
+require 'fileutils'
+
+#File csv and database paths
+csv_file = 'nasdaq100_metrics_ratios.csv'
+db_file = 'nasdaq_quant.db'
+
+REQUIRED_METRICS = [
+  "symbol",
+  "altman_z_score_2021", 
+  "piotroski_f_score_2021", 
+  "beneish_m_score_2021"
+]
+
+puts "--------------------------------"
+puts "SYSTEM CHECK: NASDAQ QUANT"
+puts "--------------------------------"
+
+#CSV File Check
+unless File.exist?(csv_file)
+  puts "ERROR: CSV file '#{csv_file}' not found."
+  exit 1
+end
+
+#Backup existing database
+if File.exist?('nasdaq_quant.db')
+  FileUtils.cp('nasdaq_quant.db', 'nasdaq_quant_backup.db')
+  puts "Backup saved as: 'nasdaq_quant_backup.db'"
+else
+  puts "No existing database found"
+end
+
+puts "CSV file '#{csv_file}' found."
+
+headers = CSV.open(csv_file, 'r', &:readline)
+missing_metrics = REQUIRED_METRICS.select { |m| !headers.include?(m)}
+
+if missing_metrics.any?
+  puts "ERROR: Missing required metrics in CSV: #{missing_metrics.join(', ')}"
+  exit 1
+else
+  puts "All required metrics are present in the CSV."
+end
+
+puts "--------------------------------"
+
+#Table Initialization
+begin
+  db = SQLite3::Database.new(db_file)
+  puts "Database '#{db_file}' opened successfully."
+
+  db.execute <<-SQL
+    CREATE TABLE IF NOT EXISTS company_fundamentals (
+      symbol TEXT PRIMARY KEY,
+      name TEXT,
+      sector TEXT,
+      z_score REAL,
+      f_score REAL,
+      m_score REAL,
+      health_status TEXT
+    );
+  SQL
+  puts "Table initialized successfully"
+rescue SQLite3::Exception => e
+  puts "Database error: #{e}"
+  exit 1
+ensure
+  db.close if db
+end
+puts "--------------------------------"
+puts "SYSTEM CHECK COMPLETED SUCCESSFULLY"
+puts "--------------------------------"
